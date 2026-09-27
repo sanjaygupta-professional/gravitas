@@ -1,0 +1,6 @@
+# build outputs
+sim
+*.bendtt
+
+# local Claude Code settings
+.claude/settings.local.json

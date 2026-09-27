@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gravitas — explained simply</title>
+<style>
+  :root {
+    --bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --card: #ffffff; --line: #d9d9d2;
+    --blue: #2a6fdb; --green: #1f8a4c; --red: #c93a3a; --amber: #b7791f; --purple: #7a4fd0;
+    --blue-bg: #e6effc; --green-bg: #e3f4ea; --red-bg: #fbe7e7; --amber-bg: #fbf1dc; --purple-bg: #efe8fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --fg: #ecece6; --muted: #9a9a92; --card: #21211e; --line: #3a3a35;
+      --blue: #6aa2ff; --green: #5fcf8c; --red: #ff7b7b; --amber: #e8b04a; --purple: #b592ff;
+      --blue-bg: #1c2a44; --green-bg: #17301f; --red-bg: #3b1d1d; --amber-bg: #3a2f17; --purple-bg: #2c2245;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; }
+  h2 span { color: var(--muted); font-weight: 400; font-size: .9rem; margin-left: 6px; }
+  p.lead { font-size: 1.1rem; color: var(--muted); margin-top: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin: 14px 0; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .tag { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+  .t-blue { background: var(--blue-bg); color: var(--blue); }
+  .t-green { background: var(--green-bg); color: var(--green); }
+  .t-red { background: var(--red-bg); color: var(--red); }
+  .t-amber { background: var(--amber-bg); color: var(--amber); }
+  .t-purple { background: var(--purple-bg); color: var(--purple); }
+  code, pre { font-family: ui-monospace, "JetBrains Mono", Menlo, monospace; font-size: .86rem; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 8px 0; }
+  code { background: var(--bg); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); }
+  pre code { border: 0; padding: 0; background: none; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { fill: var(--fg); font-family: system-ui, sans-serif; }
+  svg .mut { fill: var(--muted); }
+  svg .box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  svg .line { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  .bar { height: 18px; border-radius: 4px; background: var(--blue); }
+  .note { font-size: .9rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>gravitas <span class="tag t-purple">explained simply</span></h1>
+<p class="lead">A small gravity simulation whose <em>parallel</em> parts are mathematically proved correct by the compiler.</p>
+
+<!-- ------------------------------------------------------------ 1 -->
+<h2>1. The one-minute version</h2>
+<div class="card">
+  <p><b>What it does:</b> simulates 1,024 bodies pulling on each other with gravity (a heavy one in the middle, a cloud of light ones around it), for 100 time steps, using all your CPU cores at once.</p>
+  <p><b>What's unusual:</b> the physics isn't the point. Splitting work across cores is a classic place for silent bugs: a chunk of work gets dropped, counted twice, or mass appears from nowhere. Here, the rules that must never break are written down as <b>laws</b>, and the compiler <b>proves</b> the code obeys them. If someone edits the code so a law breaks, the proof step fails.</p>
+  <p><b>What it's written in:</b> <a href="https://bend-lang.com" style="color:var(--blue)">Bend 2</a>, a language that runs on many cores automatically <em>and</em> can check proofs. There is no AI agent or server inside the project. It's 4 source files and a compiled binary. (An AI may well have helped write the code, but nothing AI-related runs when you use it.)</p>
+</div>
+
+<!-- ------------------------------------------------------------ 2 -->
+<h2>2. The big idea <span>two halves, treated differently</span></h2>
+<div class="grid">
+  <div class="card" style="border-top:4px solid var(--green)">
+    <span class="tag t-green">PROVED</span>
+    <h3 style="margin:8px 0 4px">The shape</h3>
+    <p style="margin:0">How many bodies exist, how much total mass there is, and how the parallel forks recombine. Exact whole-number arithmetic (<code>Nat</code>), so a proof is possible.</p>
+  </div>
+  <div class="card" style="border-top:4px solid var(--amber)">
+    <span class="tag t-amber">CHECKED AT RUNTIME</span>
+    <h3 style="margin:8px 0 4px">The numerics</h3>
+    <p style="margin:0">The actual gravity maths, done in decimals (<code>F32</code>). Bend can't prove things about floating point, so <code>sim.bend</code> just asserts count and mass at the end and crashes loudly if they changed.</p>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------ 3 -->
+<h2>3. Architecture <span>the four files and who uses whom</span></h2>
+<div class="card">
+<svg viewBox="0 0 900 330" role="img" aria-label="File dependency diagram">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+
+  <!-- main -->
+  <rect class="box" x="330" y="20" width="240" height="90" rx="10" style="stroke:var(--blue);stroke-width:2.5"/>
+  <text x="450" y="50" text-anchor="middle" font-weight="700" font-size="17">main.bend</text>
+  <text x="450" y="72" text-anchor="middle" class="mut" font-size="13">THE PHYSICS</text>
+  <text x="450" y="92" text-anchor="middle" class="mut" font-size="12">Body · tree · field · step · zip</text>
+
+  <!-- laws -->
+  <rect class="box" x="30" y="150" width="240" height="80" rx="10" style="stroke:var(--purple);stroke-width:2.5"/>
+  <text x="150" y="180" text-anchor="middle" font-weight="700" font-size="17">LAWS.bend</text>
+  <text x="150" y="202" text-anchor="middle" class="mut" font-size="13">THE RULES (8 laws, human-written)</text>
+
+  <!-- proof -->
+  <rect class="box" x="30" y="255" width="240" height="60" rx="10" style="stroke:var(--green);stroke-width:2.5"/>
+  <text x="150" y="282" text-anchor="middle" font-weight="700" font-size="17">PROOF.bend</text>
+  <text x="150" y="302" text-anchor="middle" class="mut" font-size="13">THE PROOFS · the gate</text>
+
+  <!-- sim -->
+  <rect class="box" x="630" y="150" width="240" height="80" rx="10" style="stroke:var(--amber);stroke-width:2.5"/>
+  <text x="750" y="180" text-anchor="middle" font-weight="700" font-size="17">sim.bend</text>
+  <text x="750" y="202" text-anchor="middle" class="mut" font-size="13">THE DRIVER (runs the show)</text>
+
+  <!-- binary -->
+  <rect class="box" x="630" y="255" width="240" height="60" rx="10"/>
+  <text x="750" y="282" text-anchor="middle" font-weight="700" font-size="17">./sim</text>
+  <text x="750" y="302" text-anchor="middle" class="mut" font-size="13">compiled native program</text>
+
+  <!-- arrows -->
+  <path class="line" d="M150 150 L 350 112" marker-end="url(#a)"/>
+  <text x="215" y="120" class="mut" font-size="12">talks about</text>
+  <path class="line" d="M150 255 L 150 232" marker-end="url(#a)"/>
+  <text x="160" y="246" class="mut" font-size="12">proves</text>
+  <path class="line" d="M750 150 L 550 112" marker-end="url(#a)"/>
+  <text x="640" y="120" class="mut" font-size="12">calls</text>
+  <path class="line" d="M750 232 L 750 253" marker-end="url(#a)"/>
+  <text x="760" y="246" class="mut" font-size="12">compiles to</text>
+  <path class="line" d="M150 255 Q 330 200 340 112" stroke-dasharray="4 4" marker-end="url(#a)"/>
+  <text x="335" y="215" class="mut" font-size="12">reads code</text>
+</svg>
+<p class="note">Plus <code>bend</code>: a tiny shell script that runs the Bend compiler and trims its very long error messages.</p>
+</div>
+
+<!-- ------------------------------------------------------------ 4 -->
+<h2>4. How the parallelism works <span>a tree of forks</span></h2>
+<div class="card">
+<p style="margin-top:0">The 1,024 bodies sit in a balanced binary tree (2<sup>10</sup> leaves). Every node in the tree is a fork; every leaf is one body. Bend hands the two branches of each fork to different cores automatically. You never write a thread or a lock.</p>
+<svg viewBox="0 0 900 300" role="img" aria-label="Fork-join tree">
+  <g class="line">
+    <path d="M450 40 L250 110"/><path d="M450 40 L650 110"/>
+    <path d="M250 110 L150 180"/><path d="M250 110 L350 180"/>
+    <path d="M650 110 L550 180"/><path d="M650 110 L750 180"/>
+    <path d="M150 180 L100 250"/><path d="M150 180 L200 250"/>
+    <path d="M350 180 L300 250"/><path d="M350 180 L400 250"/>
+    <path d="M550 180 L500 250"/><path d="M550 180 L600 250"/>
+    <path d="M750 180 L700 250"/><path d="M750 180 L800 250"/>
+  </g>
+  <g>
+    <circle cx="450" cy="40" r="18" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="2"/>
+    <circle cx="250" cy="110" r="16" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="2"/>
+    <circle cx="650" cy="110" r="16" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="2"/>
+    <circle cx="150" cy="180" r="14" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="2"/>
+    <circle cx="350" cy="180" r="14" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="2"/>
+    <circle cx="550" cy="180" r="14" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="2"/>
+    <circle cx="750" cy="180" r="14" fill="var(--blue-bg)" stroke="var(--blue)" stroke-width="2"/>
+  </g>
+  <g fill="var(--amber-bg)" stroke="var(--amber)" stroke-width="2">
+    <rect x="88" y="240" width="24" height="20" rx="4"/><rect x="188" y="240" width="24" height="20" rx="4"/>
+    <rect x="288" y="240" width="24" height="20" rx="4"/><rect x="388" y="240" width="24" height="20" rx="4"/>
+    <rect x="488" y="240" width="24" height="20" rx="4"/><rect x="588" y="240" width="24" height="20" rx="4"/>
+    <rect x="688" y="240" width="24" height="20" rx="4"/><rect x="788" y="240" width="24" height="20" rx="4"/>
+  </g>
+  <text x="480" y="44" font-size="13" class="mut">fork: split the work in two</text>
+  <text x="450" y="285" text-anchor="middle" font-size="13" class="mut">leaves = one body each (drawn here: 8 of 1,024). Results flow back up and get added together (join).</text>
+</svg>
+<p class="note" style="margin-bottom:0">The one line that does it: <code>a b = field(p, x, …) field(p, y, …)</code>, meaning "compute both, at the same time".</p>
+</div>
+
+<!-- ------------------------------------------------------------ 5 -->
+<h2>5. What happens in one simulation step</h2>
+<div class="card">
+<svg viewBox="0 0 900 150" role="img" aria-label="One step pipeline">
+  <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+  <g>
+    <rect class="box" x="10" y="30" width="190" height="80" rx="10"/>
+    <text x="105" y="62" text-anchor="middle" font-weight="700">1. Spawn</text>
+    <text x="105" y="84" text-anchor="middle" class="mut" font-size="12">1 heavy + 1023 light (but only</text>
+    <text x="105" y="100" text-anchor="middle" class="mut" font-size="12">10 distinct: see run-visual.html)</text>
+
+    <rect class="box" x="255" y="30" width="190" height="80" rx="10"/>
+    <text x="350" y="62" text-anchor="middle" font-weight="700">2. Field</text>
+    <text x="350" y="84" text-anchor="middle" class="mut" font-size="12">each body asks: what is the</text>
+    <text x="350" y="100" text-anchor="middle" class="mut" font-size="12">pull from ALL bodies?</text>
+
+    <rect class="box" x="500" y="30" width="190" height="80" rx="10"/>
+    <text x="595" y="62" text-anchor="middle" font-weight="700">3. Kick</text>
+    <text x="595" y="84" text-anchor="middle" class="mut" font-size="12">update speed and position</text>
+    <text x="595" y="100" text-anchor="middle" class="mut" font-size="12">(all bodies in parallel)</text>
+
+    <rect class="box" x="745" y="30" width="145" height="80" rx="10"/>
+    <text x="817" y="62" text-anchor="middle" font-weight="700">4. Check</text>
+    <text x="817" y="84" text-anchor="middle" class="mut" font-size="12">count &amp; mass</text>
+    <text x="817" y="100" text-anchor="middle" class="mut" font-size="12">unchanged?</text>
+  </g>
+  <path class="line" d="M200 70 L253 70" marker-end="url(#b)"/>
+  <path class="line" d="M445 70 L498 70" marker-end="url(#b)"/>
+  <path class="line" d="M690 70 L743 70" marker-end="url(#b)"/>
+  <path class="line" d="M595 30 Q 425 -5 350 28" stroke-dasharray="4 4" marker-end="url(#b)"/>
+  <text x="470" y="14" class="mut" font-size="12">repeat 100×</text>
+</svg>
+<p class="note" style="margin-bottom:0">Every body is compared with every other body (<b>O(N²)</b> = about a million pairs per step). That is the simple, expensive way, which is why the parallelism matters.</p>
+</div>
+
+<!-- ------------------------------------------------------------ 6 -->
+<h2>6. Usage workflow <span>what you actually type</span></h2>
+<div class="card">
+<table>
+  <tr><th>Command</th><th>What it does</th><th>When</th></tr>
+  <tr><td><code>bend PROOF.bend</code></td><td>Checks all 8 laws. Prints <code>All terms check.</code> or fails.</td><td>After <em>any</em> edit to <code>main.bend</code></td></tr>
+  <tr><td><code>bend sim.bend</code></td><td>Runs the sim interpreted: slow, one core.</td><td>Quick sanity run</td></tr>
+  <tr><td><code>bend sim.bend -o sim</code></td><td>Compiles to a native program.</td><td>Once, or after code changes</td></tr>
+  <tr><td><code>./sim</code></td><td>Runs on every core; prints bodies, mass, centre of mass, timing.</td><td>The real run</td></tr>
+  <tr><td><code>./sim --threads 1</code></td><td>Same run on 1 core.</td><td>To measure speed-up</td></tr>
+</table>
+<p class="note" style="margin-bottom:0">Needs the Bend toolchain: <code>curl -fsSL https://bend-lang.com/install.sh | sh</code>. The <code>./bend</code> script in this folder is a wrapper that calls it and shortens the error output.</p>
+</div>
+
+<!-- ------------------------------------------------------------ 7 -->
+<h2>7. The safety gate <span>the reason this project exists</span></h2>
+<div class="card">
+<svg viewBox="0 0 900 250" role="img" aria-label="Edit, check, gate flow">
+  <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+  <rect class="box" x="10" y="90" width="150" height="70" rx="10"/>
+  <text x="85" y="122" text-anchor="middle" font-weight="700">Edit main.bend</text>
+  <text x="85" y="142" text-anchor="middle" class="mut" font-size="12">(you or an AI agent)</text>
+
+  <rect class="box" x="225" y="90" width="170" height="70" rx="10"/>
+  <text x="310" y="122" text-anchor="middle" font-weight="700">Type check</text>
+  <text x="310" y="142" text-anchor="middle" class="mut" font-size="12">"is it valid code?"</text>
+
+  <rect class="box" x="460" y="90" width="170" height="70" rx="10" style="stroke:var(--purple);stroke-width:2.5"/>
+  <text x="545" y="122" text-anchor="middle" font-weight="700">bend PROOF.bend</text>
+  <text x="545" y="142" text-anchor="middle" class="mut" font-size="12">"does it obey the laws?"</text>
+
+  <rect x="700" y="20" width="190" height="60" rx="10" fill="var(--green-bg)" stroke="var(--green)" stroke-width="2"/>
+  <text x="795" y="48" text-anchor="middle" font-weight="700" fill="var(--green)" style="fill:var(--green)">All terms check.</text>
+  <text x="795" y="66" text-anchor="middle" class="mut" font-size="12">safe to keep the change</text>
+
+  <rect x="700" y="170" width="190" height="60" rx="10" fill="var(--red-bg)" stroke="var(--red)" stroke-width="2"/>
+  <text x="795" y="198" text-anchor="middle" font-weight="700" style="fill:var(--red)">Error: expected ≠ observed</text>
+  <text x="795" y="216" text-anchor="middle" class="mut" font-size="12">names the broken law</text>
+
+  <path class="line" d="M160 125 L223 125" marker-end="url(#c)"/>
+  <path class="line" d="M395 125 L458 125" marker-end="url(#c)"/>
+  <path class="line" d="M630 110 L698 60" marker-end="url(#c)"/>
+  <path class="line" d="M630 140 L698 190" marker-end="url(#c)"/>
+  <text x="640" y="72" class="mut" font-size="12" style="fill:var(--green)">laws hold</text>
+  <text x="640" y="196" class="mut" font-size="12" style="fill:var(--red)">law broken</text>
+</svg>
+
+<p><b>Worked example from the README.</b> Change fusion to keep only the first body's mass (<code>Nat.add(m1, m2)</code> → <code>Nat.add(m1, 0n)</code>):</p>
+<div class="grid">
+  <div><span class="tag t-amber">normal type check</span><pre><code>$ bend main.bend --check-only
+All terms check.</code></pre><p class="note">Perfectly valid code, so an ordinary compiler is happy.</p></div>
+  <div><span class="tag t-red">the gate</span><pre><code>$ bend PROOF.bend
+Error:
+- expected : Nat.add(m1, 0n)
+- observed : Nat.add(m1, m2)
+Location: LAWS.zip_mass</code></pre><p class="note">Rejected. Mass would silently vanish.</p></div>
+</div>
+<p class="note" style="margin-bottom:0"><b>Why this matters for AI-written code:</b> you review the 8 laws once. After that an agent can rewrite <code>main.bend</code> freely and the proof step rejects anything that breaks a rule.</p>
+</div>
+
+<!-- ------------------------------------------------------------ 8 -->
+<h2>8. The eight laws <span>in plain English</span></h2>
+<div class="card">
+<table>
+  <tr><th>Law</th><th>In plain words</th><th>Why you'd care</th></tr>
+  <tr><td><code>count_pow2</code></td><td>Depth d always means exactly 2<sup>d</sup> bodies.</td><td>No body lost in the tree walk</td></tr>
+  <tr><td><code>accels_count</code></td><td>Updating bodies never changes how many there are.</td><td>The building block for the next one</td></tr>
+  <tr><td><code>step_count</code></td><td>A full simulation step never adds or drops a body.</td><td>The headline guarantee</td></tr>
+  <tr><td><code>field_split</code></td><td>Pull from two halves = pull from left + pull from right.</td><td>Forking gives the same answer as not forking</td></tr>
+  <tr><td><code>comsum_split</code></td><td>Same, for the centre-of-mass calculation.</td><td>Same</td></tr>
+  <tr><td><code>zip_count</code></td><td>Merging two systems keeps the size.</td><td>Safe merging of runs</td></tr>
+  <tr><td><code>zip_mass</code></td><td>Merging carries exactly the combined mass.</td><td>No mass invented or lost (the hardest proof)</td></tr>
+  <tr><td><code>zip_swap</code></td><td>Merging A into B equals merging B into A.</td><td>Order doesn't matter</td></tr>
+</table>
+</div>
+
+<!-- ------------------------------------------------------------ 9 -->
+<h2>9. Speed <span>1,024 bodies, 100 steps, 16-core machine (from the README)</span></h2>
+<div class="card">
+<table>
+  <tr><th style="width:90px">Threads</th><th>Time (ms), shorter is better</th><th style="width:90px">Speed-up</th></tr>
+  <tr><td>1</td><td><div class="bar" style="width:100%"></div> 3565</td><td>1.00×</td></tr>
+  <tr><td>2</td><td><div class="bar" style="width:98%"></div> 3492</td><td>1.02×</td></tr>
+  <tr><td>4</td><td><div class="bar" style="width:58.5%"></div> 2085</td><td>1.71×</td></tr>
+  <tr><td>8</td><td><div class="bar" style="width:39.7%"></div> 1416</td><td>2.52×</td></tr>
+  <tr><td>16</td><td><div class="bar" style="width:27.9%;background:var(--green)"></div> 995</td><td><b>3.58×</b></td></tr>
+</table>
+<p class="note" style="margin-bottom:0">Not a perfect 16×, and the README says so plainly: every fork has a cost to join back, and the leaves are small.</p>
+</div>
+
+<!-- ------------------------------------------------------------ 10 -->
+<h2>10. What is <em>not</em> proved <span>honest limits</span></h2>
+<div class="card">
+<ul style="margin:0; padding-left:20px">
+  <li><b>The gravity itself.</b> Decimal (F32) maths can't be proved in Bend, so physical accuracy is not guaranteed.</li>
+  <li><b>Total mass staying constant during a step.</b> True and checked while the sim runs, but the current proof tool can't get at a mass stored inside a body record. The README suggests a refactor (a parallel tree of bare numbers) that would make it provable.</li>
+  <li><b>The "cloud" is really 10 distinct light bodies</b> stacked in copies (10, 45, 120, 210, 252, …), because <code>spawn</code> derives seeds from the path down the tree rather than from the body's index. Found by running it; details in <code>run-visual.html</code>. The proofs don't cover this.</li>
+  <li><b>The centre of mass drifts slightly</b> (0.233,1.040) → (0.264,1.094). That's rounding from summing in different orders, not a bug. It's also a useful alarm: it would move noticeably if a fork were wrong.</li>
+  <li><b>Small inconsistencies in the repo:</b> <code>main.bend</code>'s header mentions a <code>check.bend</code> that doesn't exist (the checks are in <code>sim.bend</code>), and <code>sim.bend</code> prints "law step_mass" though there is no such law in <code>LAWS.bend</code>. Both are cosmetic.</li>
+</ul>
+</div>
+
+<p class="note" style="margin-top:36px">Generated from reading README.md, main.bend, LAWS.bend, PROOF.bend, sim.bend and the bend wrapper. Speed numbers are the README's; I did not re-run them.</p>
+</main>
+</body>
+</html>

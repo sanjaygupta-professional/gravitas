@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gravitas — a run, visually</title>
+<style>
+  :root { --bg:#0e1117; --panel:#171b24; --line:#2a3040; --fg:#e6e8ee; --muted:#8d95a8; --green:#5fcf8c; --amber:#e8b04a; --blue:#6aa2ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 60px; }
+  h1 { margin:0 0 2px; font-size:1.6rem; }
+  .sub { color:var(--muted); margin:0 0 16px; }
+  .layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; }
+  @media (max-width:860px){ .layout{grid-template-columns:1fr;} }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  canvas { width:100%; aspect-ratio:1/1; display:block; background:#0a0d13; border-radius:12px; border:1px solid var(--line); }
+  .controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:10px; }
+  button, select { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:6px 12px; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--blue); }
+  input[type=range] { flex:1; min-width:160px; accent-color:var(--blue); }
+  h3 { margin:0 0 8px; font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  .kv { display:flex; justify-content:space-between; font-family:ui-monospace,Menlo,monospace; font-size:.88rem; padding:3px 0; }
+  .kv b { color:var(--fg); font-weight:600; }
+  .ok { color:var(--green); } .warn { color:var(--amber); }
+  table { width:100%; border-collapse:collapse; font-family:ui-monospace,Menlo,monospace; font-size:.8rem; }
+  td, th { padding:3px 4px; text-align:right; } th { color:var(--muted); font-weight:500; } td:first-child, th:first-child { text-align:left; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; font-size:.82rem; color:var(--muted); margin-top:8px; }
+  .sw { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+  .note { color:var(--muted); font-size:.82rem; }
+  .split { margin-top:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>gravitas — a run, visually</h1>
+  <p class="sub">1,024 bodies, 100 steps, as the real program runs it. Heads-up: those 1,024 bodies are really <b>only 11 different ones</b> (1 heavy + 10 light), with copies stacked on the same spot. See the note below the picture.</p>
+
+  <div class="layout">
+    <div>
+      <canvas id="cv" width="900" height="900"></canvas>
+      <div class="controls">
+        <button id="play">▶ Play</button>
+        <input id="scrub" type="range" min="0" max="100" value="0">
+        <span id="stepLbl" style="font-family:ui-monospace,monospace;min-width:84px;text-align:right">step 0/100</span>
+        <select id="mode">
+          <option value="speed">colour: speed</option>
+          <option value="stack">colour: bodies stacked on this spot</option>
+          <option value="mass">colour: mass</option>
+        </select>
+        <select id="spd">
+          <option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option>
+        </select>
+        <label class="note"><input id="trail" type="checkbox"> trails</label>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h3>Live readout</h3>
+        <div class="kv"><span>bodies</span><b id="rBodies">–</b></div>
+        <div class="kv"><span>distinct positions</span><b id="rDistinct">–</b></div>
+        <div class="kv"><span>total mass</span><b id="rMass">–</b></div>
+        <div class="kv"><span>centre of mass</span><b id="rCom">–</b></div>
+        <div class="kv"><span>view half-width</span><b id="rZoom">–</b></div>
+        <div class="kv"><span>law: count kept</span><b id="rLaw" class="ok">✓</b></div>
+        <div class="kv"><span>mass kept</span><b id="rLaw2" class="ok">✓</b></div>
+      </div>
+
+      <div class="panel split">
+        <h3>Check vs the real Bend program</h3>
+        <table>
+          <tr><th></th><th>real ./sim</th><th>this page</th></tr>
+          <tr><td>mass</td><td>9176</td><td id="cMass">…</td></tr>
+          <tr><td>com₀ x</td><td>0.23338993</td><td id="c0x">…</td></tr>
+          <tr><td>com₀ y</td><td>1.0402507</td><td id="c0y">…</td></tr>
+          <tr><td>com₁₀₀ x</td><td>0.26439524</td><td id="c1x">…</td></tr>
+          <tr><td>com₁₀₀ y</td><td>1.0941648</td><td id="c1y">…</td></tr>
+        </table>
+        <p class="note" style="margin:8px 0 0" id="verdict">Computing the run…</p>
+      </div>
+
+      <div class="panel split">
+        <h3>What you're looking at</h3>
+        <p class="note" style="margin:0">Every step, each body is pulled by <i>all</i> 1,024 bodies (split across cores as a binary tree). What you see: the light bodies rush in toward the heavy centre around step 10, get flung outward, and the heavy body itself is dragged away from its start. The view zooms out to follow them.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;border-color:var(--amber)">
+    <h3 style="color:var(--amber)">Finding: the "cloud" is really 10 light bodies</h3>
+    <p class="note" style="margin:0;color:var(--fg)">In <code>sim.bend</code>, a body's random seed is derived from the path taken down the tree: left = <code>next(s)</code>, right = <code>next(next(s))</code>. Going left-then-right gives the same seed as right-then-left, so every path with the same number of right turns lands on the same seed, and <code>body_at</code> uses only the seed (the index is only used to spot body&nbsp;0). Result: 10 distinct light bodies, stacked in copies of 10, 45, 120, 210, 252, 210, 120, 45, 10 and 1. Identical bodies feel identical forces, so they stay stacked for the whole run. The comment "each body is determined by its index alone" is not what the code does. The proofs are unaffected, since they concern counts and mass, but the physics is far less rich than 1,024 bodies suggests.</p>
+  </div>
+
+  <p class="note" style="margin-top:20px">This is a JavaScript re-implementation of <code>main.bend</code> / <code>sim.bend</code> (same seed, same constants, F32 rounding, same pairwise sum order), because the real <code>./sim</code> only prints summaries. It is not the Bend binary itself; the table above compares the two.</p>
+</main>
+
+<script>
+// ===== CORE:BEGIN — mirrors sim.bend (spawn) and main.bend (field/kick/step) =====
+const f32 = Math.fround;
+const DEPTH = 10, N = 1 << DEPTH, STEPS = 100, DT = f32(0.004), SOFT = f32(0.05), SEED = 12345;
+
+const next = s => (Math.imul(s, 1664525) + 1013904223) >>> 0;
+const rand01 = s => f32((s >>> 8) / 16777216);
+const signed = s => f32(f32(rand01(s) - 0.5) * 2);
+
+// spawn(d,i,s): left child seed = next(s), right child seed = next(next(s)); leaf index = i
+function spawn(d, i, s, out) {
+  if (d === 0) {
+    if (i === 0) { out.push({ m: 1000, x: 0, y: 0, vx: 0, vy: 0 }); return; }
+    const s1 = next(s), s2 = next(s1), s3 = next(s2), s4 = next(s3);
+    out.push({ m: (s4 & 15) + 1, x: f32(signed(s1) * 4), y: f32(signed(s2) * 4),
+               vx: f32(signed(s3) * 0.3), vy: f32(signed(s4) * 0.3) });
+    return;
+  }
+  spawn(d - 1, 2 * i, next(s), out);
+  spawn(d - 1, 2 * i + 1, next(next(s)), out);
+}
+
+// field(): pairwise (tree-shaped) sum of the pull of every body on a probe
+function field(lo, hi, X, Y, M, px, py, res) {
+  if (hi - lo === 1) {
+    const dx = f32(X[lo] - px), dy = f32(Y[lo] - py);
+    const r2 = f32(f32(f32(dx * dx) + f32(dy * dy)) + SOFT);
+    const k = f32(f32(1 / r2) / r2);
+    const gm = f32(k * M[lo]);
+    res[0] = f32(gm * dx); res[1] = f32(gm * dy); return;
+  }
+  const mid = (lo + hi) >> 1, a = [0, 0], b = [0, 0];
+  field(lo, mid, X, Y, M, px, py, a);
+  field(mid, hi, X, Y, M, px, py, b);
+  res[0] = f32(a[0] + b[0]); res[1] = f32(a[1] + b[1]);
+}
+
+// step(): every body reads the OLD system, position uses old velocity (as in kick)
+function step(S) {
+  const nx = new Float32Array(N), ny = new Float32Array(N), nvx = new Float32Array(N), nvy = new Float32Array(N);
+  const r = [0, 0];
+  for (let i = 0; i < N; i++) {
+    field(0, N, S.x, S.y, S.m, S.x[i], S.y[i], r);
+    nx[i] = f32(S.x[i] + f32(DT * S.vx[i]));
+    ny[i] = f32(S.y[i] + f32(DT * S.vy[i]));
+    nvx[i] = f32(S.vx[i] + f32(DT * r[0]));
+    nvy[i] = f32(S.vy[i] + f32(DT * r[1]));
+  }
+  return { m: S.m, x: nx, y: ny, vx: nvx, vy: nvy };
+}
+
+// com(): pairwise-summed first moments, like comsum
+function momSum(lo, hi, S, res) {
+  if (hi - lo === 1) { const m = S.m[lo]; res[0] = m; res[1] = f32(m * S.x[lo]); res[2] = f32(m * S.y[lo]); return; }
+  const mid = (lo + hi) >> 1, a = [0,0,0], b = [0,0,0];
+  momSum(lo, mid, S, a); momSum(mid, hi, S, b);
+  res[0] = f32(a[0] + b[0]); res[1] = f32(a[1] + b[1]); res[2] = f32(a[2] + b[2]);
+}
+function com(S) { const r = [0,0,0]; momSum(0, N, S, r); return [f32(r[1] / r[0]), f32(r[2] / r[0])]; }
+function totalMass(S) { let t = 0; for (let i = 0; i < N; i++) t += S.m[i]; return t; }
+
+function initial() {
+  const bodies = []; spawn(DEPTH, 0, SEED, bodies);
+  const S = { m: new Float32Array(N), x: new Float32Array(N), y: new Float32Array(N), vx: new Float32Array(N), vy: new Float32Array(N) };
+  bodies.forEach((b, i) => { S.m[i] = b.m; S.x[i] = b.x; S.y[i] = b.y; S.vx[i] = b.vx; S.vy[i] = b.vy; });
+  return S;
+}
+// ===== CORE:END =====
+
+// ---------- UI ----------
+if (typeof document !== 'undefined') {
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const frames = [];               // frames[t] = state after t steps
+let cur = 0, playing = false, ready = false, lastTs = 0, acc = 0;
+let RANGES = [], C0 = [0, 0];    // per-frame half-width of the view (auto-zoom) and its fixed centre
+
+function computeRanges() {
+  C0 = com(frames[0]);
+  const raw = frames.map(S => {
+    const r = Array.from(S.x, (x, i) => Math.hypot(x - C0[0], S.y[i] - C0[1])).sort((a, b) => a - b);
+    return Math.max(4.5, 1.25 * r[921]);               // keep ~90% of bodies in view
+  });
+  RANGES = raw.map((_, t) => {                         // moving average so the zoom is smooth
+    let a = 0, n = 0;
+    for (let j = Math.max(0, t - 5); j <= Math.min(raw.length - 1, t + 5); j++) { a += raw[j]; n++; }
+    return a / n;
+  });
+}
+
+function computeAll() {
+  let S = initial(); frames.push(S);
+  let t = 0;
+  (function chunk() {
+    const end = performance.now() + 30;
+    while (t < STEPS && performance.now() < end) { S = step(S); frames.push(S); t++; }
+    $('verdict').textContent = `Computing the run… ${t}/${STEPS}`;
+    if (t < STEPS) { setTimeout(chunk, 0); return; }
+    computeRanges(); ready = true; verify();
+    const h = /step=(\d+)/.exec(location.hash); if (h) cur = Math.min(STEPS, +h[1]);
+     $('scrub').max = STEPS; draw(); updateReadout();
+  })();
+}
+
+function verify() {
+  const S0 = frames[0], S1 = frames[STEPS];
+  const [x0, y0] = com(S0), [x1, y1] = com(S1), m = totalMass(S0);
+  $('cMass').textContent = m; $('c0x').textContent = x0.toFixed(8); $('c0y').textContent = y0.toFixed(7);
+  $('c1x').textContent = x1.toFixed(8); $('c1y').textContent = y1.toFixed(7);
+  const close = (a, b) => Math.abs(a - b) < 1e-4;
+  const ok = m === 9176 && close(x0, 0.23338993) && close(y0, 1.0402507) && close(x1, 0.26439524) && close(y1, 1.0941648);
+  $('verdict').innerHTML = ok ? '<span class="ok">Matches the real program</span> (to 1e-4).'
+                              : '<span class="warn">Differs from the real program</span>; treat the animation as approximate.';
+}
+
+function color(i, S, mode, n) {
+  if (mode === 'stack') return `hsl(${210 - 190 * Math.min(1, Math.log2(n) / Math.log2(252))}, 85%, 62%)`;
+  if (mode === 'mass')  return `hsl(${200 - (S.m[i] - 1) * 8}, 85%, 62%)`;
+  const v = Math.hypot(S.vx[i], S.vy[i]);
+  const t = Math.min(1, v / 3);
+  return `hsl(${220 - 200 * t}, 90%, ${55 + 10 * t}%)`;
+}
+
+function draw() {
+  if (!ready) return;
+  const S = frames[cur], mode = $('mode').value, W = cv.width, R = RANGES[cur], k = W / (2 * R);
+  const X = x => (x - C0[0] + R) * k, Y = y => (R - (y - C0[1])) * k;
+  if ($('trail').checked && cur > 0) { ctx.fillStyle = 'rgba(10,13,19,0.22)'; ctx.fillRect(0, 0, W, W); }
+  else { ctx.fillStyle = '#0a0d13'; ctx.fillRect(0, 0, W, W); }
+  // bodies with identical positions are drawn once, sized by how many are stacked there
+  const groups = new Map();
+  for (let i = 1; i < N; i++) {
+    const key = S.x[i] + ',' + S.y[i];
+    const g = groups.get(key);
+    if (g) g.n++; else groups.set(key, { i, n: 1 });
+  }
+  ctx.font = '600 15px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+  for (const { i, n } of groups.values()) {
+    const px = X(S.x[i]), py = Y(S.y[i]);
+    if (px < 0 || py < 0 || px > W || py > W) continue;
+    ctx.fillStyle = color(i, S, mode, n);
+    const r = 3 + S.m[i] * 0.35 + Math.sqrt(n) * 0.8;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, 6.2832); ctx.fill();
+    if (n > 1) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillText('×' + n, px + r + 4, py); }
+  }
+  // heavy central body
+  const cx = X(S.x[0]), cy = Y(S.y[0]);
+  const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 26);
+  g.addColorStop(0, 'rgba(255,220,120,1)'); g.addColorStop(1, 'rgba(255,220,120,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 26, 0, 6.2832); ctx.fill();
+  // centre-of-mass cross
+  const [mx, my] = com(S), qx = X(mx), qy = Y(my);
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(qx - 7, qy); ctx.lineTo(qx + 7, qy); ctx.moveTo(qx, qy - 7); ctx.lineTo(qx, qy + 7); ctx.stroke();
+}
+
+function updateReadout() {
+  if (!ready) return;
+  const S = frames[cur], [mx, my] = com(S), m = totalMass(S);
+  $('stepLbl').textContent = `step ${cur}/${STEPS}`;
+  $('scrub').value = cur;
+  $('rBodies').textContent = S.x.length; $('rDistinct').textContent = new Set(Array.from(S.x, (x, i) => x + ',' + S.y[i])).size; $('rZoom').textContent = '±' + RANGES[cur].toFixed(1);
+  $('rMass').textContent = m;
+  $('rCom').textContent = `(${mx.toFixed(3)}, ${my.toFixed(3)})`;
+  const same = S.x.length === N, sameM = m === totalMass(frames[0]);
+  $('rLaw').textContent = same ? '✓' : '✗'; $('rLaw').className = same ? 'ok' : 'warn';
+  $('rLaw2').textContent = sameM ? '✓' : '✗'; $('rLaw2').className = sameM ? 'ok' : 'warn';
+}
+
+function legend() {
+  const m = $('mode').value, el = $('legend');
+  if (m === 'stack') el.innerHTML = '<span><i class="sw" style="background:hsl(210,85%,62%)"></i>1 body</span><span><i class="sw" style="background:hsl(20,85%,62%)"></i>252 bodies</span><span>· ×N = N identical bodies on one spot · glow = the mass-1000 centre · + = centre of mass</span>';
+  else if (m === 'mass') el.innerHTML = '<span><i class="sw" style="background:hsl(200,85%,62%)"></i>light</span><span><i class="sw" style="background:hsl(130,85%,62%)"></i>heavier</span><span>· bigger dot = more mass · ×N = stack size · glow = the mass-1000 centre · + = centre of mass</span>';
+  else el.innerHTML = '<span><i class="sw" style="background:hsl(220,90%,55%)"></i>slow</span><span><i class="sw" style="background:hsl(20,90%,65%)"></i>fast</span><span>· glow = the mass-1000 centre · + = centre of mass</span>';
+}
+
+function tick(ts) {
+  if (playing && ready) {
+    acc += (ts - lastTs) * (+$('spd').value) * 0.012;   // steps per ms
+    while (acc >= 1) { acc -= 1; cur++; if (cur >= STEPS) { cur = STEPS; playing = false; $('play').textContent = '↻ Replay'; break; } }
+    draw(); updateReadout();
+  }
+  lastTs = ts; requestAnimationFrame(tick);
+}
+
+$('play').onclick = () => {
+  if (!ready) return;
+  if (cur >= STEPS) { cur = 0; ctx.fillStyle = '#0a0d13'; ctx.fillRect(0, 0, cv.width, cv.height); }
+  playing = !playing; $('play').textContent = playing ? '❚❚ Pause' : '▶ Play';
+};
+$('scrub').oninput = e => { cur = +e.target.value; ctx.fillStyle = '#0a0d13'; ctx.fillRect(0, 0, cv.width, cv.height); draw(); updateReadout(); };
+$('mode').onchange = () => { legend(); ctx.fillStyle = '#0a0d13'; ctx.fillRect(0, 0, cv.width, cv.height); draw(); };
+$('trail').onchange = () => { ctx.fillStyle = '#0a0d13'; ctx.fillRect(0, 0, cv.width, cv.height); draw(); };
+legend(); computeAll(); requestAnimationFrame(tick);
+}
+</script>
+</body>
+</html>
